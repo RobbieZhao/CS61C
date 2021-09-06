@@ -1,0 +1,4 @@
+*.o
+bit_ops
+lfsr
+vector-test

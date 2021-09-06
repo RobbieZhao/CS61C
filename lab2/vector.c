@@ -140,11 +140,7 @@ void vector_set(vector_t *v, size_t loc, int value)
 		abort();
 	}
 
-	if (loc < v->size)
-	{
-		return v->data[loc];
-	}
-	else
+	if (loc >= v->size)
 	{
 		int oldSize = v->size;
 
@@ -160,7 +156,7 @@ void vector_set(vector_t *v, size_t loc, int value)
 		{
 			v->data[oldSize] = 0;
 		}
-
-		v->data[v->size] = value;
 	}
+
+	v->data[loc] = value;
 }
