@@ -279,7 +279,7 @@ int beargit_log()
   /* COMPLETE THE REST */
   char commit_id[COMMIT_ID_SIZE];
   read_string_from_file(".beargit/.prev", commit_id, COMMIT_ID_BYTES);
-  // commit_id[COMMIT_ID_SIZE] = '\0';
+  commit_id[COMMIT_ID_SIZE] = '\0';
 
   if (strcmp(commit_id, "0000000000000000000000000000000000000000") == 0)
   {
