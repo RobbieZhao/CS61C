@@ -1,3 +1,7 @@
 autotest
 test
+.beargit
+test.c
+a.out
 beargit
+
