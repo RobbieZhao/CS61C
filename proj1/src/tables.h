@@ -18,11 +18,11 @@ typedef struct {
 } Symbol;
 
 typedef struct {
-    Symbol* tbl;
-    uint32_t len;
-    uint32_t cap;
+    Symbol* tbl;   // don't get confused, think of this as an array of Symbols instead of a pointer to a Symbol
+    uint32_t len;  // number of entries in the table
+    uint32_t cap;  // current capacity of the table
     int mode;
-} SymbolTable;
+} SymbolTable;     // Based on this definition, it's natural to think of building a hash table
 
 /* Helper functions: */
 
