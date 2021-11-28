@@ -71,14 +71,50 @@ unsigned write_pass_one(FILE* output, const char* name, char** args, int num_arg
 
    Returns 0 on success and -1 on error. 
  */
+
+/*
+    R-format: opcode 6 (for R-format, this should always be 0)
+              rs     5 (not used for shift instruction)
+              rt     5
+              rd     5
+              shamt  5 (0 when not applicable)
+              funct  6
+    I-format: opcode 6
+              rs     5
+              rt     5
+              imm   16
+    J-format: opcode 6
+              addr  26
+*/
 int translate_inst(FILE* output, const char* name, char** args, size_t num_args, uint32_t addr,
     SymbolTable* symtbl, SymbolTable* reltbl) {
     if (strcmp(name, "addu") == 0)       return write_rtype (0x21, output, args, num_args);
     else if (strcmp(name, "or") == 0)    return write_rtype (0x25, output, args, num_args);
     else if (strcmp(name, "slt") == 0)   return write_rtype (0x2a, output, args, num_args);
     else if (strcmp(name, "sltu") == 0)  return write_rtype (0x2b, output, args, num_args);
+
     else if (strcmp(name, "sll") == 0)   return write_shift (0x00, output, args, num_args);
-    /* YOUR CODE HERE */
+
+    else if (strcmp(name, "jr") == 0)    return write_jr (0x08, output, args, num_args);
+
+    else if (strcmp(name, "addiu") == 0) return write_addiu (0x09, output, args, num_args);
+
+    else if (strcmp(name, "ori") == 0)   return write_ori (0x0d, output, args, num_args);
+
+    else if (strcmp(name, "lui") == 0)   return write_lui (0x0f, output, args, num_args);
+
+    else if (strcmp(name, "lb") == 0)    return write_mem (0x20, output, args, num_args);
+    else if (strcmp(name, "lbu") == 0)   return write_mem (0x24, output, args, num_args);
+    else if (strcmp(name, "lw") == 0)    return write_mem (0x23, output, args, num_args);
+    else if (strcmp(name, "sb") == 0)    return write_mem (0x28, output, args, num_args);
+    else if (strcmp(name, "sw") == 0)    return write_mem (0x2b, output, args, num_args);
+
+    else if (strcmp(name, "beq") == 0)   return write_branch(0x04, output, args, num_args, addr, symtbl);
+    else if (strcmp(name, "bne") == 0)   return write_branch(0x05, output, args, num_args, addr, symtbl);
+
+    else if (strcmp(name, "j") == 0)     return write_jump (0x02, output, args, num_args, addr, reltbl);
+    else if (strcmp(name, "jal") == 0)   return write_jump (0x03, output, args, num_args, addr, reltbl);
+
     else                                 return -1;
 }
 
@@ -91,12 +127,28 @@ int translate_inst(FILE* output, const char* name, char** args, size_t num_args,
  */
 int write_rtype(uint8_t funct, FILE* output, char** args, size_t num_args) {
     // Perhaps perform some error checking?
+    if (funct >= 64) {
+        fprintf(stderr, "invalid funct code: %d\n", funct);
+        return -1;
+    }
+
+    if (num_args != 3) {
+        fprintf(stderr, "incorrect number of agrs for R-format with funct: %02x. Expected: %d, got %d\n", funct, 3, num_args);
+        return -1;
+    }
 
     int rd = translate_reg(args[0]);
     int rs = translate_reg(args[1]);
     int rt = translate_reg(args[2]);
 
     uint32_t instruction = 0;
+    instruction = instruction + 0;             // 6 opcode
+    instruction = instruction << 5 + rs;       // 5 rs
+    instruction = instruction << 5 + rt;       // 5 rt
+    instruction = instruction << 5 + rd;       // 5 rd
+    instruction = instruction << 5 + 0;        // 5 shamt
+    instruction = instruction << 6 + funct;    // 6 funct
+
     write_inst_hex(output, instruction);
     return 0;
 }
@@ -110,13 +162,228 @@ int write_rtype(uint8_t funct, FILE* output, char** args, size_t num_args) {
  */
 int write_shift(uint8_t funct, FILE* output, char** args, size_t num_args) {
 	// Perhaps perform some error checking?
+    if (funct >= 64) {
+        fprintf(stderr, "invalid funct code: %d\n", funct);
+        return -1;
+    }
+
+    if (num_args != 3) {
+        fprintf(stderr, "incorrect number of agrs for sll. Expected: %d, got %d\n", 3, num_args);
+        return -1;
+    }
 
     long int shamt;
+    // The shift instruction only uses rd and rt
     int rd = translate_reg(args[0]);
     int rt = translate_reg(args[1]);
     int err = translate_num(&shamt, args[2], 0, 31);
+    if (err == -1) {
+        fprintf(stderr, "invalid shamt: %s\n", args[2]);
+        return -1;
+    }
 
     uint32_t instruction = 0;
+    // TODO: What is rs supposed to be? I couldn't find any docs on that.
+    //       I am assuming since this field isn't used for shift instructions,
+    //       it can be of any value?
+    instruction = instruction + 0;               // 6 opcode
+    instruction = instruction << 5 + 0;          // 5 rs
+    instruction = instruction << 5 + rt;         // 5 rt
+    instruction = instruction << 5 + rd;         // 5 rd
+    instruction = instruction << 5 + shamt;      // 5 shamt
+    instruction = instruction << 6 + funct;      // 6 funct
+
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/*
+ * Jump Register: jr. PC = R[rs]
+ * Surprisingly, jr is also a R-format instruction!
+ */
+int write_jr(uint8_t funct, FILE* output, char** args, size_t num_args) {
+    if (num_args != 1) {
+        fprintf(stderr, "incorrect number of agrs for jr. Expected: %d, got %d\n", 1, num_args);
+        return -1;
+    }
+
+    int rs = translate_reg(args[0]);
+
+    uint32_t instruction = 0;
+    instruction = instruction + 0;            // 6 opcode
+    instruction = instruction << 5 + rs;      // 5 rs     
+    instruction = instruction << 5 + 0;       // 5 rt
+    instruction = instruction << 5 + 0;       // 5 rd
+    instruction = instruction << 5 + 0;       // 5 shamt
+    instruction = instruction << 6 + funct;   // 6 funct
+
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/*
+  Add immediate unsigned: addiu. R[rt] = R[rs] + SignExtImm
+  This is a I-format instruction. 
+  
+  Notice: the result is written to rt, not rd!
+ */
+int write_addiu(uint8_t opcode, FILE* output, char** args, size_t num_args) {
+    if (num_args != 3) {
+        fprintf(stderr, "incorrect number of agrs for addiu. Expected: %d, got %d\n", 3, num_args);
+        return -1;
+    }
+
+    long int imm;
+
+    int rt = translate_reg(args[0]);
+    int rs = translate_reg(args[1]);
+    int err = translate_num(&imm, args[2], -0x8000, 0x7fff);
+    if (err == -1) {
+        fprintf(stderr, "invalid imm: %s\n", args[2]);
+        return -1;
+    }
+
+    uint32_t instruction = 0;
+    instruction += opcode;                               // 6 opcode
+    instruction = instruction << 5 + rs;                 // 5 rs
+    instruction = instruction << 5 + rt;                 // 5 rt
+    instruction = (instruction << 16) | (0xffff & imm);  // 16 imm
+
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/*
+ * Or immediate: ori. R[rt] = R[rs] | ZeroExtImm. I-format
+ */
+int write_ori(uint8_t opcode, FILE* output, char** args, size_t num_args) {
+    if (num_args != 3) {
+        fprintf(stderr, "incorrect number of agrs for ori. Expected: %d, got %d\n", 3, num_args);
+        return -1;
+    }
+
+    long int imm;
+
+    int rt = translate_reg(args[0]);
+    int rs = translate_reg(args[1]);
+    int err = translate_num(&imm, args[2], 0, 0xffff);
+    if (err == -1) {
+        fprintf(stderr, "invalid imm: %s\n", args[2]);
+        return -1;
+    }
+
+    uint32_t instruction = 0;
+    instruction = instruction + opcode;      // 6 opcode
+    instruction = instruction << 5 + rs;     // 5 rs
+    instruction = instruction << 5 + rt;     // 5 rt
+    instruction = instruction << 16 + imm;   // 16 imm
+
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/*
+  Load upper immediate: lui. R[rt] = {imm, 16'b0}. I-format
+ */
+int write_lui(uint8_t opcode, FILE* output, char** args, size_t num_args) {
+    if (num_args != 2) {
+        fprintf(stderr, "incorrect number of agrs for lui. Expected: %d, got %d\n", 2, num_args);
+        return -1;
+    }
+
+    long int imm;
+    int rt = translate_reg(args[0]);
+    int err = translate_num(&imm, args[1], 0, 0xffff);
+    if (err == -1) {
+        fprintf(stderr, "invalid imm: %s\n", args[1]);
+        return -1;
+    }
+
+    uint32_t instruction = 0;
+    instruction = instruction + opcode;      // 6 opcode
+    instruction = instruction << 5 + 0;      // 5 rs
+    instruction = instruction << 5 + rt;     // 5 rt
+    instruction = instruction << 16 + imm;   // 16 imm
+
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/* For instructions that deal with memory: lb, lbu, lw, sb, sw
+   These instructions all follow the same format (I-format):
+               inst $rt, imm($rs)
+ */
+int write_mem(uint8_t opcode, FILE* output, char** args, size_t num_args) {
+    if (num_args != 3) {
+        fprintf(stderr, "incorrect number of agrs for mem instruction. Expected: %d, got %d\n", 3, num_args);
+        return -1;
+    }
+
+    long int imm;
+    int rt = translate_reg(args[0]);
+    int err = translate_num(&imm, args[1], -0x8000, 0x7fff);
+    if (err == -1) {
+        fprintf(stderr, "invalid imm: %s\n", args[1]);
+        return -1;
+    }
+    int rs = translate_reg(args[2]);
+
+    uint32_t instruction = 0;
+    instruction = instruction + opcode;                 // 6 opcode
+    instruction = instruction << 5 + rs;                // 5 rs
+    instruction = instruction << 5 + rt;                // 5 rt
+    instruction = (instruction << 16) | (0xffff & imm); // 16 imm
+
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/* Branch instructions: beq and bne
+   I-format: inst $rs, $rt, imm
+
+   In the first pass, we already filled out the symbol table. So here
+   we will need to get the address of the given label in table and 
+   calculate the diff between the address to jump to and the address
+   of the current instruction so we know how much offset to jump.
+ */
+int write_branch(uint8_t opcode, FILE* output, char** args, size_t num_args, uint32_t addr, SymbolTable* symtbl) {
+    if (num_args != 3) {
+        fprintf(stderr, "incorrect number of agrs for branch instruction. Expected: %d, got %d\n", 3, num_args);
+        return -1;
+    }
+
+    int rs = translate_reg(args[0]);
+    int rt = translate_reg(args[1]);
+    uint32_t branch_addr = get_addr_for_symbol(symtbl, args[2]);
+    int imm = branch_addr - (addr + 4);
+
+    uint32_t instruction = 0;
+    instruction = instruction + opcode;                  // 6 opcode
+    instruction = instruction << 5 + rs;                 // 5 rs
+    instruction = instruction << 5 + rt;                 // 5 rt
+    instruction = (instruction << 16) | (0xffff & imm);  // 16 imm
+    
+    write_inst_hex(output, instruction);
+    return 0;
+}
+
+/* Jump instructions: j and jal. J-format.
+    J-format: opcode 6
+              addr  26
+ */
+int write_jump(uint8_t opcode, FILE* output, char** args, size_t num_args, uint32_t addr, SymbolTable* reltbl) {
+    if (num_args != 1) {
+        fprintf(stderr, "incorrect number of agrs for jump instruction. Expected: %d, got %d\n", 1, num_args);
+        return -1;
+    }
+
+    add_to_table(reltbl, args[0], addr);
+
+    // TODO: What should the 26 bit address field be here?
+    uint32_t instruction = 0;
+    instruction = instruction + opcode;
+    instruction = instruction << 26;
+
     write_inst_hex(output, instruction);
     return 0;
 }

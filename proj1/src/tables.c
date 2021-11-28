@@ -89,18 +89,6 @@ SymbolTable* create_table(int mode) {
     return table;
 }
 
-typedef struct {
-    char *name;
-    uint32_t addr;
-} Symbol;
-
-typedef struct {
-    Symbol* tbl;   // don't get confused, think of this as an array of Symbols instead of a pointer to a Symbol
-    uint32_t len;  // number of entries in the table
-    uint32_t cap;  // current capacity of the table
-    int mode;
-} SymbolTable;     // Based on this definition, it's natural to think of building a hash table
-
 /* Frees the given SymbolTable and all associated memory. */
 void free_table(SymbolTable* table) {
     // First free table->tbl

@@ -14,6 +14,10 @@ void write_inst_string(FILE* output, const char* name, char** args, int num_args
 }
 
 void write_inst_hex(FILE *output, uint32_t instruction) {
+    // See: https://stackoverflow.com/questions/15108932/c-the-x-format-specifier
+    // 8 means show 8 digits
+    // 0 means pad with 0s
+    // x means lower-case hexadecimal
     fprintf(output, "%08x\n", instruction);
 }
 
@@ -58,8 +62,7 @@ int translate_num(long int* output, const char* str, long int lower_bound,
     if (!str || !output) {
         return -1;
     }
-    /* YOUR CODE HERE */
-    // 
+
     long int converted = strtol(str, NULL, 0);
 
     if (converted < lower_bound || converted > upper_bound)
