@@ -40,11 +40,38 @@
  */
 unsigned write_pass_one(FILE* output, const char* name, char** args, int num_args) {
     if (strcmp(name, "li") == 0) {
-        /* YOUR CODE HERE */
-        return 0;
+        if (num_args != 2) {
+            fprintf(stderr, "incorrect number of agrs for li. Expected: %d, got %d\n", 2, num_args);
+            return 0;
+        }
+
+        long int imm;
+
+        int err = translate_num(&imm, args[1], -0x80000000, 0x7fffffff);
+        if (err == -1) {
+            fprintf(stderr, "immediate out of range for li: %s\n", args[1]);
+            return 0;
+        }
+
+        if (imm >= -0x8000 && imm <= 0x7fff) {
+            fprintf(output, "addiu %s $0 %ld\n", args[0], imm);
+            return 1;
+        }
+
+        fprintf(output, "lui %s %ld\n", args[0], imm);
+        fprintf(output, "ori %s %s %ld\n", args[0], args[0], imm);
+
+        return 1;
     } else if (strcmp(name, "blt") == 0) {
-        /* YOUR CODE HERE */
-        return 0;
+        if (num_args != 3) {
+            fprintf(stderr, "incorrect number of agrs for blt. Expected: %d, got %d\n", 3, num_args);
+            return 0;
+        }
+
+        fprintf(output, "slt $at %s %s\n", args[0], args[1]);
+        fprintf(output, "bne $at $0 %s\n", args[2]);
+
+        return 1;
     } else {
         write_inst_string(output, name, args, num_args);
         return 1;
@@ -368,8 +395,6 @@ int write_branch(uint8_t opcode, FILE* output, char** args, size_t num_args, uin
 }
 
 /* Jump instructions: j and jal. J-format.
-    J-format: opcode 6
-              addr  26
  */
 int write_jump(uint8_t opcode, FILE* output, char** args, size_t num_args, uint32_t addr, SymbolTable* reltbl) {
     if (num_args != 1) {
